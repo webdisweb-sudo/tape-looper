@@ -694,9 +694,30 @@ dots();
   const el = document.getElementById('scroll');
   let startY = 0, startTop = 0, scrollTop = 0;
   let maxScroll = 0;
+  let wrapper = null;
+
+  function setup() {
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.style.cssText = 'flex:1;overflow:hidden;position:relative;min-height:0;';
+      el.parentNode.insertBefore(wrapper, el);
+      wrapper.appendChild(el);
+      el.style.position = 'absolute';
+      el.style.top = '0';
+      el.style.left = '0';
+      el.style.right = '0';
+      el.style.overflow = 'visible';
+    }
+    scrollTop = 0;
+    el.style.transform = 'translateY(0)';
+    // Force reflow
+    setTimeout(() => {
+      maxScroll = Math.max(0, el.scrollHeight - wrapper.clientHeight);
+    }, 100);
+  }
 
   function updateMax() {
-    maxScroll = el.scrollHeight - el.clientHeight;
+    maxScroll = Math.max(0, el.scrollHeight - wrapper.clientHeight);
   }
 
   el.addEventListener('touchstart', e => {
@@ -712,19 +733,14 @@ dots();
     e.preventDefault();
   }, {passive: false});
 
-  // Make el a scroll container with a wrapper
-  const wrapper = document.createElement('div');
-  wrapper.style.cssText = 'flex:1;overflow:hidden;position:relative;';
-  el.parentNode.insertBefore(wrapper, el);
-  wrapper.appendChild(el);
-  el.style.position = 'absolute';
-  el.style.top = '0';
-  el.style.left = '0';
-  el.style.right = '0';
-  el.style.bottom = 'auto';
-  el.style.minHeight = '100%';
-  el.style.overflow = 'visible';
-  el.style.transform = 'translateY(0)';
+  // Reset on orientation change
+  window.addEventListener('resize', () => {
+    scrollTop = 0;
+    el.style.transform = 'translateY(0)';
+    setTimeout(updateMax, 200);
+  });
+
+  setup();
 })();
 
 </script>
