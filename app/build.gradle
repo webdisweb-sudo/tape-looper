@@ -12,7 +12,7 @@ android {
         versionName "1.0"
     }
     buildTypes {
-        debug { minifyEnabled false }
+        release { minifyEnabled false }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -20,5 +20,6 @@ android {
     }
 }
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.4.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.12.0'
 }
