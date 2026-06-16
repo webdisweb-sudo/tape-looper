@@ -68,24 +68,24 @@ input[type=range].ps{-webkit-appearance:none;appearance:none;height:3px;width:55
 input[type=range].ps::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e8f0f8,#8090a0);border:1px solid var(--border);cursor:pointer;box-shadow:0 1px 3px var(--shadow)}
 
 /* MAIN LAYOUT - changes in landscape */
-#main-layout{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;z-index:1}
+#main-layout{flex:1;overflow:hidden;display:flex;flex-direction:column;z-index:1;min-height:0}
 
 /* PORTRAIT: tracks scroll */
-#scroll{position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:6px;display:flex;flex-direction:column;gap:5px}
+#scroll{flex:1;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:6px;display:flex;flex-direction:column;gap:5px}
 #scroll::-webkit-scrollbar{width:4px}
 #scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 #scroll::-webkit-scrollbar-track{background:var(--bg)}
 
 /* LANDSCAPE: side by side */
 @media (orientation:landscape){
-  #main-layout{flex-direction:row}
-  #scroll{position:absolute;top:0;left:0;bottom:0;width:55%;border-right:2px solid var(--border)}
-  #eq-panel{display:flex!important;position:absolute;top:0;left:55%;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:8px;flex-direction:column;gap:6px;background:linear-gradient(180deg,#c0ccd4,#b0bcc8)}
   #hdr .logo{font-size:10px;letter-spacing:2px}
+  #hdr{padding:5px 10px}
+  #mbar{padding:4px 8px}
+  #tpar{padding:4px 8px}
 }
 
-/* EQ PANEL (visible in landscape, hidden in portrait via card expand) */
-#eq-panel{display:none;flex-direction:column;gap:6px}
+/* EQ PANEL hidden - EQ is inside each card */
+#eq-panel{display:none!important}
 .eq-panel-title{font-size:9px;color:var(--txt3);letter-spacing:3px;font-weight:bold;padding:4px 0}
 .eq-track-section{background:var(--panel2);border-radius:6px;border:1px solid var(--border);padding:8px;box-shadow:0 1px 3px var(--shadow),inset 0 1px 0 var(--shadow2)}
 .eq-track-title{font-size:9px;font-weight:bold;margin-bottom:6px}
