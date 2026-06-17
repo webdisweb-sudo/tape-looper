@@ -555,7 +555,7 @@ async function bounceStart(mode) {
     const fname = projectName + '-mix.wav';
     const r = await saveToDevice(b64, expDir, fname);
     document.getElementById('bp-fill').style.width = '100%';
-    document.getElementById('bp-status').textContent = r.startsWith('OK:') ? '✓ Music/TapeLooper/' + expDir + '/' + fname : '✓ ' + r;
+    document.getElementById('bp-status').textContent = r.startsWith('OK:') ? '✓ Download/TapeLooper/' + expDir + '/' + fname : '✓ ' + r;
   } else {
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i];
@@ -573,7 +573,7 @@ async function bounceStart(mode) {
       await new Promise(r => setTimeout(r, 200));
     }
     document.getElementById('bp-fill').style.width = '100%';
-    document.getElementById('bp-status').textContent = '✓ Music/TapeLooper/' + expDir;
+    document.getElementById('bp-status').textContent = '✓ Download/TapeLooper/' + expDir;
   }
 }
 
@@ -610,7 +610,7 @@ function saveProject() {
   const json = JSON.stringify(data, null, 2);
   const b64 = btoa(unescape(encodeURIComponent(json)));
   saveToDevice(b64, 'Projects', projectName + '.json').then(r => {
-    if (r.startsWith('OK:')) alert('✓ Сохранено:\nMusic/TapeLooper/Projects/' + projectName + '.json');
+    if (r.startsWith('OK:')) alert('✓ Сохранено:\nDownload/TapeLooper/Projects/' + projectName + '.json');
     else alert('Ошибка: ' + r);
   });
 }
