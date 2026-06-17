@@ -85,17 +85,12 @@ public class MainActivity extends Activity {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
                     values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                    // Both WAV and JSON go to Download — only allowed directory for external
                     values.put(MediaStore.MediaColumns.RELATIVE_PATH,
-                        fileName.endsWith(".wav") ?
-                            "Music/TapeLooper/" + subDir :
-                            "Documents/TapeLooper/" + subDir);
+                        "Download/TapeLooper/" + subDir);
 
-                    Uri uri;
-                    if (fileName.endsWith(".wav")) {
-                        uri = getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values);
-                    } else {
-                        uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    }
+                    Uri uri = getContentResolver().insert(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
 
                     if (uri == null) return "ERR:Failed to create MediaStore entry";
 
