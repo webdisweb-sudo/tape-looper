@@ -780,20 +780,53 @@ function stopT(t) {
 }
 
 async function recStart(t) {
+  // Init AudioContext first (requires user gesture)
   ctx();
+  if (actx.state === 'suspended') await actx.resume();
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    const mr = new MediaRecorder(stream);
+    // Request mic with fallback constraints
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false},
+        video:false
+      });
+    } catch(e1) {
+      // Fallback: try with default constraints
+      stream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+    }
+    // Pick best available codec
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/ogg')
+      ? 'audio/ogg'
+      : '';
+    const mr = new MediaRecorder(stream, mimeType ? {mimeType} : {});
     t.chunks = [];
-    mr.ondataavailable = e => t.chunks.push(e.data);
+    mr.ondataavailable = e => { if(e.data.size>0) t.chunks.push(e.data); };
     mr.onstop = async () => {
       stream.getTracks().forEach(s=>s.stop());
-      try { const blob=new Blob(t.chunks,{type:'audio/webm'}); const ab=await blob.arrayBuffer(); t.buf=await actx.decodeAudioData(ab); t.name='mic-'+(t.i+1); }
-      catch(e) { t.name='err'; }
+      try {
+        const blob = new Blob(t.chunks, {type: mr.mimeType || 'audio/webm'});
+        const ab   = await blob.arrayBuffer();
+        t.buf  = await actx.decodeAudioData(ab);
+        t.name = 'mic-'+(t.i+1);
+      } catch(e) {
+        console.error('Decode error:', e);
+        t.name = 'decode-err';
+        alert('Ошибка декодирования: '+e.message);
+      }
       t.recording=false; renderCard(t); renderDetail(t); dots();
     };
-    mr.start(); t.mr=mr; t.recording=true; renderCard(t); renderDetail(t); dots();
-  } catch(e) { alert('Микрофон: '+e.message); }
+    mr.start(100); // collect every 100ms
+    t.mr=mr; t.recording=true; renderCard(t); renderDetail(t); dots();
+  } catch(e) {
+    alert('Микрофон недоступен: '+e.message+'
+
+Проверьте разрешения в настройках приложения.');
+  }
 }
 function recStop(t) { if(t.mr){t.mr.stop();t.mr=null;} }
 
@@ -1527,20 +1560,53 @@ function stopT(t) {
 }
 
 async function recStart(t) {
+  // Init AudioContext first (requires user gesture)
   ctx();
+  if (actx.state === 'suspended') await actx.resume();
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    const mr = new MediaRecorder(stream);
+    // Request mic with fallback constraints
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false},
+        video:false
+      });
+    } catch(e1) {
+      // Fallback: try with default constraints
+      stream = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+    }
+    // Pick best available codec
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/ogg')
+      ? 'audio/ogg'
+      : '';
+    const mr = new MediaRecorder(stream, mimeType ? {mimeType} : {});
     t.chunks = [];
-    mr.ondataavailable = e => t.chunks.push(e.data);
+    mr.ondataavailable = e => { if(e.data.size>0) t.chunks.push(e.data); };
     mr.onstop = async () => {
       stream.getTracks().forEach(s=>s.stop());
-      try { const blob=new Blob(t.chunks,{type:'audio/webm'}); const ab=await blob.arrayBuffer(); t.buf=await actx.decodeAudioData(ab); t.name='mic-'+(t.i+1); }
-      catch(e) { t.name='err'; }
+      try {
+        const blob = new Blob(t.chunks, {type: mr.mimeType || 'audio/webm'});
+        const ab   = await blob.arrayBuffer();
+        t.buf  = await actx.decodeAudioData(ab);
+        t.name = 'mic-'+(t.i+1);
+      } catch(e) {
+        console.error('Decode error:', e);
+        t.name = 'decode-err';
+        alert('Ошибка декодирования: '+e.message);
+      }
       t.recording=false; renderCard(t); renderDetail(t); dots();
     };
-    mr.start(); t.mr=mr; t.recording=true; renderCard(t); renderDetail(t); dots();
-  } catch(e) { alert('Микрофон: '+e.message); }
+    mr.start(100); // collect every 100ms
+    t.mr=mr; t.recording=true; renderCard(t); renderDetail(t); dots();
+  } catch(e) {
+    alert('Микрофон недоступен: '+e.message+'
+
+Проверьте разрешения в настройках приложения.');
+  }
 }
 function recStop(t) { if(t.mr){t.mr.stop();t.mr=null;} }
 
