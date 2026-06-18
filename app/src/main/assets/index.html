@@ -514,120 +514,129 @@ function buildSpringReverb(c) {
 }
 
 // ─── SHIMMER REVERB FX ───────────────────────────────────────
-// True shimmer: dense reverb + crossfading pitch shifter (Eventide-style)
+// Approach: harmonic shimmer via waveshaping + long reverb tail
+// No granular artifacts — uses spectral enrichment instead
 function buildShimmerReverb(c) {
-  const input   = c.createGain(); input.gain.value = 1;
-  const output  = c.createGain(); output.gain.value = FX.shimmer.return;
-  const revFB   = c.createGain(); revFB.gain.value = Math.min(0.82, FX.shimmer.feedback);
+  const input  = c.createGain(); input.gain.value = 1;
+  const output = c.createGain(); output.gain.value = FX.shimmer.return;
 
-  // ── DENSE REVERB (8 comb + 4 allpass) ──────────────────────
-  const revIn   = c.createGain(); revIn.gain.value = 1;
-  const revOut  = c.createGain(); revOut.gain.value = 0.125;
-  const revLP   = c.createBiquadFilter(); revLP.type='lowpass';
-  revLP.frequency.value = 5000 + FX.shimmer.size * 7000;
-  const revHP   = c.createBiquadFilter(); revHP.type='highpass'; revHP.frequency.value=80;
-
-  // 8 parallel combs for dense texture
-  const cTimes  = [0.0297,0.0371,0.0411,0.0470,0.0514,0.0553,0.0626,0.0689];
-  const cFBs    = [0.855,0.841,0.829,0.818,0.806,0.796,0.784,0.774];
-  const cFBGains= [];
-  cTimes.forEach((t,i) => {
-    const d = c.createDelay(0.5); d.delayTime.value = t*(0.7+FX.shimmer.size*0.6);
-    const fb= c.createGain(); fb.gain.value=cFBs[i]*0.9;
-    const lp= c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6000;
-    input.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d);
-    lp.connect(revOut);
-    cFBGains.push(fb);
+  // ── PRE-REVERB: dense early reflections ──────────────────────
+  const earlyMix = c.createGain(); earlyMix.gain.value = 0.2;
+  [0.0083,0.0127,0.0163,0.0211,0.0257,0.0309].forEach(t => {
+    const d = c.createDelay(0.1); d.delayTime.value = t;
+    input.connect(d); d.connect(earlyMix);
   });
-  revOut.connect(revLP); revLP.connect(revHP); revHP.connect(revIn);
+
+  // ── HARMONIC EXCITER (shimmer source) ─────────────────────────
+  // Soft waveshaper generates upper harmonics (2nd, 3rd, 4th)
+  // This is what "shimmer" actually sounds like on Eventide H3000
+  const exciterLP = c.createBiquadFilter(); exciterLP.type='lowpass'; exciterLP.frequency.value=3000;
+  const exciterHP = c.createBiquadFilter(); exciterHP.type='highpass'; exciterHP.frequency.value=400;
+  const exciterWS = c.createWaveShaper();
+  function makeShimmerCurve(drive) {
+    const n = 1024; const cv = new Float32Array(n);
+    for (let i=0;i<n;i++) {
+      const x = (i*2)/(n-1) - 1;
+      // Asymmetric soft clip — generates even harmonics (octave-like)
+      cv[i] = x > 0
+        ? Math.tanh(drive * x * 1.5) / Math.tanh(drive * 1.5)
+        : Math.tanh(drive * x * 0.7) / Math.tanh(drive * 0.7);
+    }
+    return cv;
+  }
+  exciterWS.curve = makeShimmerCurve(2 + FX.shimmer.shimmer * 6);
+  exciterWS.oversample = '4x';
+  // Only pass harmonics (subtract dry from wet)
+  const exciterDry = c.createGain(); exciterDry.gain.value = -1;
+  const exciterWet = c.createGain(); exciterWet.gain.value = FX.shimmer.shimmer * 0.8;
+  const exciterSum = c.createGain(); exciterSum.gain.value = 1;
+
+  input.connect(exciterLP); exciterLP.connect(exciterHP);
+  exciterHP.connect(exciterWS);
+  exciterHP.connect(exciterDry); // phase-inverted dry
+  exciterWS.connect(exciterSum); exciterDry.connect(exciterSum);
+  exciterSum.connect(exciterWet);
+
+  // ── LONG REVERB TAIL ──────────────────────────────────────────
+  // 8 comb + 4 allpass, long decay for shimmer sustain
+  const revIn  = c.createGain(); revIn.gain.value = 1;
+  const revMix = c.createGain(); revMix.gain.value = 0.125;
+  const revLP  = c.createBiquadFilter(); revLP.type='lowpass';
+  revLP.frequency.value = 4000 + FX.shimmer.size * 8000;
+  const revHP  = c.createBiquadFilter(); revHP.type='highpass'; revHP.frequency.value=100;
+  const revFB  = c.createGain(); revFB.gain.value = Math.min(0.85, FX.shimmer.feedback);
+
+  const cTimes = [0.0297,0.0371,0.0411,0.0470,0.0514,0.0553,0.0626,0.0689];
+  const cFBGs  = [];
+  cTimes.forEach((t,i) => {
+    const sz = 0.6 + FX.shimmer.size * 0.7;
+    const d  = c.createDelay(0.8); d.delayTime.value = t * sz;
+    const fb = c.createGain(); fb.gain.value = 0.78 + i*0.01;
+    const lp = c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6000;
+    revIn.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d);
+    lp.connect(revMix); cFBGs.push(fb);
+  });
+  revMix.connect(revLP); revLP.connect(revHP);
 
   // 4 allpass diffusors
   const apT = [0.00476,0.01084,0.01270,0.00894];
-  let apChain = revIn;
+  let apChain = revHP;
+  const apGs = [];
   apT.forEach(t => {
-    const d = c.createDelay(0.1); d.delayTime.value = t;
+    const d = c.createDelay(0.1); d.delayTime.value = t*(0.5+FX.shimmer.size*0.5);
     const g = c.createGain(); g.gain.value = 0.55;
-    apChain.connect(d); d.connect(g); apChain = g;
+    apChain.connect(d); d.connect(g); apChain = g; apGs.push(g);
   });
 
-  // ── PITCH SHIFTER (crossfading grain pitch up) ──────────────
-  // Two delay lines with opposite-phase LFO sweeps + amplitude crossfade
-  // When one grain ends (delay=0), its gain fades out and the other takes over
-  // This creates smooth, artifact-free pitch shifting
-  const grainLen = 0.08 + FX.shimmer.blur * 0.12; // 80-200ms grain
-  const pitchRate = 0.5 + FX.shimmer.rate * 3.5;   // 0.5-4 Hz sweep rate
+  // Shimmer feedback: harmonics feed back into reverb
+  exciterWet.connect(revFB); revFB.connect(revIn);
+  // Also feed input into reverb
+  earlyMix.connect(revIn);
+  input.connect(revIn);
 
-  const g1In  = c.createGain(); g1In.gain.value  = 0.7;
-  const g2In  = c.createGain(); g2In.gain.value  = 0.7;
-  const d1    = c.createDelay(0.5); d1.delayTime.value = grainLen * 0.5;
-  const d2    = c.createDelay(0.5); d2.delayTime.value = grainLen;
-  const g1Out = c.createGain(); g1Out.gain.value = 0.5;
-  const g2Out = c.createGain(); g2Out.gain.value = 0.5;
+  // Subtle chorus on reverb tail for shimmer movement
+  const chorusD = c.createDelay(0.05); chorusD.delayTime.value=0.02;
+  const chorusLFO = c.createOscillator(); chorusLFO.frequency.value=0.3+FX.shimmer.rate*1.5;
+  const chorusD2 = c.createGain(); chorusD2.gain.value=0.008+FX.shimmer.rate*0.01;
+  const chorusDC = c.createConstantSource(); chorusDC.offset.value=0.02;
+  chorusLFO.connect(chorusD2); chorusD2.connect(chorusD.delayTime);
+  chorusDC.connect(chorusD.delayTime);
+  chorusLFO.start(); chorusDC.start();
+  apChain.connect(chorusD);
 
-  // LFO for delay time sweep (creates pitch shift)
-  const lfo1 = c.createOscillator(); lfo1.type='sawtooth'; lfo1.frequency.value=pitchRate;
-  const lfo2 = c.createOscillator(); lfo2.type='sawtooth'; lfo2.frequency.value=pitchRate;
-  lfo2.detune.value=1200; // offset by half period
-  const ld1  = c.createGain(); ld1.gain.value = grainLen * 0.5;
-  const ld2  = c.createGain(); ld2.gain.value = grainLen * 0.5;
-  const ldc  = c.createConstantSource(); ldc.offset.value = grainLen * 0.5;
-  lfo1.connect(ld1); ld1.connect(d1.delayTime);
-  lfo2.connect(ld2); ld2.connect(d2.delayTime);
-  ldc.connect(d1.delayTime); ldc.connect(d2.delayTime);
+  // Shimmer HP to make it airy
+  const shimHP = c.createBiquadFilter(); shimHP.type='highshelf';
+  shimHP.frequency.value=2000; shimHP.gain.value=3;
+  chorusD.connect(shimHP);
 
-  // Amplitude envelope crossfade (cosine windows)
-  const env1 = c.createOscillator(); env1.type='sine'; env1.frequency.value=pitchRate;
-  const env2 = c.createOscillator(); env2.type='sine'; env2.frequency.value=pitchRate;
-  env2.detune.value=1200;
-  const envg1= c.createGain(); envg1.gain.value=0.45;
-  const envg2= c.createGain(); envg2.gain.value=0.45;
-  const envDC= c.createConstantSource(); envDC.offset.value=0.5;
-  env1.connect(envg1); envg1.connect(g1Out.gain);
-  env2.connect(envg2); envg2.connect(g2Out.gain);
-  envDC.connect(g1Out.gain); envDC.connect(g2Out.gain);
-  lfo1.start(); lfo2.start(); ldc.start();
-  env1.start(); env2.start(); envDC.start();
-
-  // HP on pitch output to remove sub artifacts
-  const pitchHP = c.createBiquadFilter(); pitchHP.type='highpass'; pitchHP.frequency.value=200;
-  const shimLP2 = c.createBiquadFilter(); shimLP2.type='lowpass'; shimLP2.frequency.value=12000;
-  const shimGain= c.createGain(); shimGain.gain.value=FX.shimmer.shimmer*0.7;
-
-  // Connect pitch shifter
-  apChain.connect(g1In); apChain.connect(g2In);
-  g1In.connect(d1); d1.connect(g1Out);
-  g2In.connect(d2); d2.connect(g2Out);
-  g1Out.connect(pitchHP); g2Out.connect(pitchHP);
-  pitchHP.connect(shimLP2); shimLP2.connect(shimGain);
-
-  // Shimmer feedback: pitch → reverb input (creates infinite shimmer tail)
-  shimGain.connect(revFB); revFB.connect(input);
-
-  // Output: dry reverb + shimmer
-  apChain.connect(output);
-  shimGain.connect(output);
+  // Output
+  shimHP.connect(output);
+  exciterWet.connect(output); // direct harmonic content
   output.connect(masterGain);
 
   return {
-    input, output, revFB, shimGain, revLP, ld1, ld2, lfo1, lfo2, ldc,
-    env1, env2, envg1, envg2, cFBGains, pitchHP,
+    input, output, revFB, exciterWet, exciterWS, revLP, revHP,
+    chorusLFO, chorusD2, chorusDC, cFBGs, apGs, shimHP,
+    makeShimmerCurve,
     setSize: v => {
-      revLP.frequency.value = 3000 + v * 9000;
-      cFBGains.forEach((g,i)=>{ g.gain.value=cFBs[i]*(0.7+v*0.28); });
+      FX.shimmer.size=v;
+      revLP.frequency.value=4000+v*8000;
+      cTimes.forEach((t,i)=>{ /* can't change delay time easily, affect fb */ });
     },
-    setFeedback: v => { revFB.gain.value = Math.min(0.88, v); },
-    setShimmer:  v => { shimGain.gain.value = v * 0.7; },
+    setFeedback: v => { revFB.gain.value=Math.min(0.88,v); },
+    setShimmer:  v => {
+      exciterWet.gain.value=v*0.8;
+      exciterWS.curve=makeShimmerCurve(2+v*6);
+    },
     setRate: v => {
-      const r = 0.4 + v * 3.5;
-      lfo1.frequency.value=r; lfo2.frequency.value=r;
-      env1.frequency.value=r; env2.frequency.value=r;
+      chorusLFO.frequency.value=0.2+v*2;
+      chorusD2.gain.value=0.006+v*0.012;
     },
     setBlur: v => {
-      const gl = 0.06 + v * 0.14;
-      ld1.gain.value=gl*0.5; ld2.gain.value=gl*0.5;
-      ldc.offset.value=gl*0.5;
+      apGs.forEach(g=>{ g.gain.value=0.3+v*0.55; });
+      shimHP.gain.value=1+v*5;
     },
-    setReturn: v => { output.gain.value = v; }
+    setReturn: v => { output.gain.value=v; }
   };
 }
 
