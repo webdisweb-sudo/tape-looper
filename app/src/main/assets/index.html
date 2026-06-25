@@ -1228,8 +1228,10 @@ function renderDetail(t){
   const inner=document.getElementById('tv-inner');
   const br=inner.querySelector('.btn-rec');
   const bp=inner.querySelector('.btn-play');
+  const be=inner.querySelector('.btn-edit');
   if(br){br.className='tbig btn-rec'+(t.recording?' armed':'');br.textContent=t.recording?'⏺ STOP':'⏺ REC';}
   if(bp){bp.className='tbig btn-play'+(t.buf?(t.playing?' playing':''):' dis');bp.textContent=t.playing?'⏸ PAUSE':'▶ PLAY';}
+  if(be){be.className='tbig btn-edit'+(t.buf?'':' dis');}
 }
 
 function buildDetailView(t){
